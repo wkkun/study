@@ -16,9 +16,6 @@ Isolate 和线程的区别
 
 ​	Isolate拥有自己的heap ,Mutator thread 多个Helper Thread,  Isolate是执行在Mutator thread 线程上,但是在程序运行过程中,Mutator thread 可能会变,即从一个线程切换到另一个线程
 
-​	
-
-​	
 
 混入mixin
 
