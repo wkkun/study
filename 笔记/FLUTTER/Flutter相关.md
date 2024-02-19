@@ -32,8 +32,7 @@ Isolate 和线程的区别
 ##### flutter相关
 
 大体框架描述:
-
-
+![ac7d1cec200f7ea7cb6cbab04eda252f](https://raw.githubusercontent.com/wkkun/study/main/%E7%AC%94%E8%AE%B0/img/ac7d1cec200f7ea7cb6cbab04eda252f.webp)
 
 生命周期
 
