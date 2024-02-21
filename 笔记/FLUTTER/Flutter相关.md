@@ -148,11 +148,63 @@ _renderObject = (widget as RenderObjectWidget).createRenderObject(this);
 ![trees](assets/trees.webp)
 widget到Element是一对多  Element到RenderObject是1对0或者1 只有RenderObjectElement才会生成RenderObjec
 
+### State 声明周期
+![2-5.a59bef97](assets/2-5.a59bef97.jpg)
+1. initState：当 widget 第一次插入到 widget 树时会被调用，对于每一个State对象，Flutter 框架只会调用一次该回调，所以，通常在该回调中做一些一次性的操作，如状态初始化、订阅子树的事件通知等。不能在该回调中调用BuildContext.dependOnInheritedWidgetOfExactType（该方法用于在 widget 树上获取离当前 widget 最近的一个父级InheritedWidget，关于InheritedWidget我们将在后面章节介绍），原因是在初始化完成后， widget 树中的InheritFrom widget也可能会发生变化，所以正确的做法应该在在build（）方法或didChangeDependencies()中调用它。
+2. didChangeDependencies()：当State对象的依赖发生变化时会被调用；例如：在之前build() 中包含了一个InheritedWidget （第七章介绍），然后在之后的build() 中Inherited widget发生了变化，那么此时InheritedWidget的子 widget 的didChangeDependencies()回调都会被调用。典型的场景是当系统语言 Locale 或应用主题改变时，Flutter 框架会通知 widget 调用此回调。需要注意，组件第一次被创建后挂载的时候（包括重创建）对应的didChangeDependencies也会被调用。
+3. build()：此回调读者现在应该已经相当熟悉了，它主要是用于构建 widget 子树的，会在如下场景被调用：在调用initState()之后。
+        在调用didUpdateWidget()之后。
+        在调用setState()之后。
+        在调用didChangeDependencies()之后。
+        在State对象从树中一个位置移除后（会调用deactivate）又重新插入到树的其他位置之后。
+        reassemble()：此回调是专门为了开发调试而提供的，在热重载(hot reload)时会被调用，此回调在Release模式下永远不会被调用。
+  5. didUpdateWidget ()：在 widget 重新构建时，Flutter 框架会调用widget.canUpdate来检测 widget 树中同一位置的新旧节点，然后决定是否需要更新，如果widget.canUpdate返回true则会调用此回调。正如之前所述，widget.canUpdate会在新旧 widget 的 key 和 runtimeType 同时相等时会返回true，也就是说在在新旧 widget 的key和runtimeType同时相等时didUpdateWidget()就会被调用。
+  6. deactivate()：当 State 对象从树中被移除时，会调用此回调。在一些场景下，Flutter 框架会将 State 对象重新插到树中，如包含此 State 对象的子树在树的一个位置移动到另一个位置时（可以通过GlobalKey 来实现）。如果移除后没有重新插入到树中则紧接着会调用dispose()方法。
+  7. dispose()：当 State 对象从树中被永久移除时调用；通常在此回调中释放资源
+        
+        
 
-三种通道通信
+### 三种通道通信
+Flutter 官方提供了一种 Platform Channel 的方案，用于 Dart 和平台之间相互通信。
+
+核心原理：
+Flutter应用通过Platform Channel将传递的数据编码成消息的形式，跨线程发送到该应用所在的宿主(Android或iOS)；
+宿主接收到Platform Channel的消息后，调用相应平台的API，也就是原生编程语言来执行相应方法；
+执行完成后将结果数据通过同样方式原路返回给应用程序的Flutter部分。
+整个过程的消息和响应是异步的，所以不会直接阻塞用户界面。
+
+1) Flutter提供了三种不同的Channel：
+
+BasicMessageChannel：传递字符串和半结构化数据
+MethodChannel：方法调用
+EventChannel：数据流的通信
+
+2) 方法编解码MethodCodec有两个子类：
+StandardMethodCodec
+JSONMethodCodec
+
+3) 消息编解码MessageCodec有4个子类：
+StandardMessageCodec
+StringCodec
+JSONMessageCodec
+BinaryCodec
+
+4) BinaryMessages
+_handlers的数据类型为map，其中以MethodChannel的name为key，以返回值为Future的Function为value。
 
 
-通信的实现
+
+### 通信的实现
+
+name(Channel名称): name是用于区分不同Platform Channel的唯一标志.在一个Flutter应用中,通常会存在多个Platform Channel,不同Channel之间通过name那么来区分.比如在使用MethodChannel平台发起方法调用时,需要为MethodChannel指定对应的name.
+
+messager(信使): messager也称为信使,通俗来说信使就是现代的快递员,它负责把数据从Flutter搬运到JAndroid/IOS平台,或者从Android/IOS搬运到Flutter).对于Flutter中的三种Channel,尽管各自用途不同,但messager都是BinaryMessager。当我们创建一个Channel时,并为其设置消息处理器时,最终会为该Channel绑定一个BinaryMessagerHandler.并以Channel的name为key,保存在Map结构中.当接受到发送消息后,会根据消息中携带的channel名称取出对应BinaryMessagerHandler,并交由其处理.在Android平台中,BinaryMessenger是一个接口,其实现类是FlutterNativeView
+
+Codec(编解码器): 在Platform Channel中,binaryMessenger携带的数据需要在Dart层,Native层以及Android/IOS平台中传输,需要考虑一种与平台无关的数据协议,且又能支持图片/文件等资源,因此官方最终采用了二进制字节流作为数据传输协议:发送方需要把数据编码成二进制数据,接受方再把数据解码成原始数据.而负责编解码操作的就是Codec。
+
+本质上, Platform Channel通信还是通过信使BinaryMessenger来完成消息的收、发操作。
+
+MethodChannel的执行流程涉及到主线程和UI线程的交互，代码从Dart到C++再到Java层，执行完相应逻辑后原路返回，从Java层到C++层再到Dart层。
 
 ### flutter引擎的启动流程
 
@@ -221,7 +273,19 @@ mixin RendererBinding on BindingBase, ...{
 2. 生成将自定义的widget包裹在RootWidget中生成Elment树和RenderObject树，并设置BuildOwner
 3. 尽快开启下一帧绘制
 
-### flutter的刷新流程
+### flutter的刷新流程 state.setState
+
+setState
+=>Element.markNeedsBuild()
+=>BuildOwner.scheduleBuildFor()
+=>_dirtyElements..add(Element)
+=>当前vsync到来回调drawFrame时 遍历_dirtyElements 执行 Element.rebuild()
+=>Element.performRebuild()
+=>State.build() Element.updateChild 重建widget树和element树
+=>遍历当前树 根据是否变化调用markNeedsLayout
+=>然后走下面的渲染机制
+
+
 
 ### flutter的渲染机制 
 
@@ -316,6 +380,99 @@ SchedulerBinding.dart
 3. flushCompositingBits
 4. flushPaint 遍历nodesNeedingPaint列表，调用每一个节点的paint方法进行重绘，绘制过程会生成Layer。需要说明一下，flutter中绘制结果是保存在Layer中的，也就是说只要Layer不释放，那么绘制的结果就会被缓存，因此，Layer可以跨frame来缓存绘制结果，避免不必要的重绘开销。Flutter框架绘制过程中，遇到isRepaintBoundary 为 true 的节点时，才会生成一个新的Layer。可见Layer和 renderObject 不是一一对应关系，父子节点可以共享，这个我们会在随后的一个试验中来验证。当然，如果是自定义组件，我们可以在renderObject中手动添加任意多个 Layer，这通常用于只需一次绘制而随后不会发生变化的绘制元素的缓存场景，
 5. 上屏 绘制完成后，我们得到的是一棵Layer树，最后我们需要将Layer树中的绘制信息在屏幕上显示。我们知道Flutter是自实现的渲染引擎，因此，我们需要将绘制信息提交给Flutter engine，而renderView.compositeFrame 正是完成了这个使命
+     
+#### layer （层）
+
+renderobject 在进行绘制时，会根据renderobject树生成相对应的layer树，最终发送给GPU线程渲染到屏幕上
+
+layer主要使用的是容器类ContainerLayer 和渲染类PictureLayer
+ContainerLayer
+  持有一个子layer集合
+PictureLayer
+ 其持有一个 ui.Picture（记录canvas的图像绘制操作），它永远是layer树的叶子节点
+
+在绘制流程中
+从根节点开始按照深度优先遍历整个renderobject树，如果当前节点时绘制边界节点（isRepaintBoundary=true）  则生成一个容器类layer 并创建一个想对应的PaintingContext 调用Renderobject._paintWithContext（）进行绘制
+在调用canva时 如果canva为null 则会创建一个Canvas和想对应的PictureLayer 并将PictureLayer添加到容器layer中
+
+```
+  Canvas get canvas {
+    if (_canvas == null) {
+      _startRecording();
+    }
+    assert(_currentLayer != null);
+    return _canvas!;
+  }
+  
+  void _startRecording() {
+    assert(!_isRecording);
+    _currentLayer = PictureLayer(estimatedBounds);
+    _recorder = ui.PictureRecorder();
+    _canvas = Canvas(_recorder!);
+    _containerLayer.append(_currentLayer!);
+  }
+```
+需要注意的是 每个容器layer 只有一个PaintingContext，为所有的child共有，当需要绘制时且_currentLayer为null时就会创建一个PictureLayer并添加到容器layer中
+_currentLayer为null的时机是，
+1，child节点是分界节点时在创建新的容器layer前会先保存当前PictureLayer并置空
+2，当前分界节点绘制结束后也会保存其PictureLayer并置空
+
+所以创建PictureLayer时机有两个
+1，分界节点刚创建容器layer，需要绘制时，该绘制可能是其本身也可能是child
+2，其绘制的前一个兄弟节点时分界节点时，再绘制自身时也会重新创建PictureLayer
+
+对于一个分界节点来说，如果其child节点没有分界节点，则其和child公用一个PictureLayer
+
+####  layer合成的 rootPipelineOwner.flushCompositingBits()
+    
+  在flutter中针对视图子树做变换时，有两种方式
+  1，在绘制当前子树前针 保存canvas 并做转换 再绘制结束后 再恢复
+  2，针对整个容器layer做转换
+  分界节点会重新创建容器layer和PictureLayer，而PictureLayer和canvas是一一对应的，
+  如果变换子树的子节点存在分界节点则分界节点子树及其之后的兄弟节点因为新建PictureLayer和canvas则都无法适用方式1的变化，只能通过方式2 新建容器layer 并做转换
+ 
+ 渲染管线中的flushCompositingBits即是遍历整个视图树，如果当前节点或者其子树存在分界节点则设置_needsCompositing为true 即是需要合成，如果要转换则需要新建容器layer做转换
+
+####  layer的好处
+
+1. 跨帧缓存，在flushPaint中如果当前RenderObject不需要更新绘制则直接复用
+2. 实现局部有范围的刷新，renderobject的markNeedsPaint机制是从当前节点 从下往上找到最近的一个分界节点加入到_nodesNeedingPaint中等待绘制，并将当前节点到分界节点路径上的renderobject都设置 _needsPaint= true，只重新绘制找到的分界节点，其他的兄弟节点和父节点是不会绘制的，但是需要注意的是 会重新绘制分界节点内部的所有PictureLayer 不管其他PictureLayer是否改变
+#### 单绘制流程
+```
+void main() {
+  //1.创建绘制记录器和Canvas
+  PictureRecorder recorder = PictureRecorder();
+  Canvas canvas = Canvas(recorder);
+  //2.在指定位置区域绘制。
+  var rect = Rect.fromLTWH(30, 200, 300,300 );
+  drawChessboard(canvas,rect); //画棋盘
+  drawPieces(canvas,rect);//画棋子
+  //3.创建layer，将绘制的产物保存在layer中
+  var pictureLayer = PictureLayer(rect);
+  //recorder.endRecording()获取绘制产物。
+  pictureLayer.picture = recorder.endRecording();
+  var rootLayer = OffsetLayer();
+  rootLayer.append(pictureLayer);
+  //4.上屏，将绘制的内容显示在屏幕上。
+  final SceneBuilder builder = SceneBuilder();
+  final Scene scene = rootLayer.buildScene(builder);
+  window.render(scene);
+}
+
+Canvas 是绘制工具
+PictureRecorder 是图形绘制操作记录类
+使用Canvas的所有操作都会使用PictureRecorder记录
+最终 PictureRecorder生成一个图形操作集合类Picture
+PictureLayer是图形绘制记录载体 使用_picture记录
+
+OffsetLayer是容器layer 可以添加其他layer 
+PictureLayer添加进OffsetLayer中
+
+OffsetLayer通过SceneBuilder 生个一个 engine layer树 scene
+然后通过FlutterView.render 发送到GPU线程进行渲染显示
+
+``` 
+  
 
 
 
